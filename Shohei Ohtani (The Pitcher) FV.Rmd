@@ -1,0 +1,230 @@
+---
+title: "Shohei Ohtani (The Pitcher) Correct"
+author: "Marco Paul Perez"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load Necessary Libraries
+```{r}
+library(dplyr)  # For data manipulation
+library(ggplot2)  # For visualization
+library(tidyr)  # For data wrangling
+```
+
+Set working directory (adjust the path accordingly)
+```{r}
+setwd('/Users/paulperezgarcia/Documents/Data Playbook/Ohtani Pitching')
+```
+
+Import pitching statistics from CSV files
+```{r}
+stats_2021 <- read.csv('2021 Pitching Stats.csv')
+stats_2022 <- read.csv('2022 Pitching Stats.csv')
+stats_2023 <- read.csv('2023 Pitching Stats.csv')
+stats_2024 <- read.csv('2024 Pitching Stats.csv')
+```
+
+Select only important columns for analysis
+```{r}
+selected_columns <- c("Player", "W", "ERA", "IP", "WHIP", "FIP")
+
+stats_2021 <- stats_2021[, selected_columns]
+stats_2022 <- stats_2022[, selected_columns]
+stats_2023 <- stats_2023[, selected_columns]
+stats_2024 <- stats_2024[, selected_columns]
+```
+
+Remove duplicate player entries (if they played for multiple teams in a season)
+```{r}
+stats_2021 <- stats_2021 %>%
+  distinct(Player, .keep_all = TRUE)
+stats_2022 <- stats_2022 %>%
+  distinct(Player, .keep_all = TRUE)
+stats_2023 <- stats_2023 %>%
+  distinct(Player, .keep_all = TRUE)
+stats_2024 <- stats_2024 %>%
+  distinct(Player, .keep_all = TRUE) %>%
+  filter(IP >= 100)
+```
+
+Identify players who played in all four seasons
+```{r}
+common_players <- Reduce(intersect, list(stats_2021$Player, stats_2022$Player, stats_2023$Player, stats_2024$Player))
+```
+
+Filter the 2024 stats to include only common players
+```{r}
+stats_2024_common <- stats_2024 %>%
+  filter(Player %in% common_players)
+```
+
+Standardize key performance variables
+```{r}
+stats_2024_z <- stats_2024_common %>%
+  mutate(
+    ERA_z = -scale(ERA),
+    WHIP_z = -scale(WHIP),
+    W_z = scale(W),
+    IP_z = scale(IP),
+    FIP_z = -scale(FIP),
+    Weighted_Score = ERA_z * .35 +
+                     WHIP_z * .20 +
+                     W_z * .05 +
+                     IP_z * .15 +
+                     FIP_z * .25
+  )
+```
+
+Results from the Weighted_Score analysis
+```{r}
+print(stats_2024_z %>%
+  dplyr::select(Player, Weighted_Score) %>%
+  arrange(desc(Weighted_Score)))
+```
+
+Create a dataset for each season that only contains the common_players
+```{r}
+stats_2021_common <- stats_2021[stats_2021$Player %in% common_players, ]
+stats_2022_common <- stats_2022[stats_2022$Player %in% common_players, ]
+stats_2023_common <- stats_2023[stats_2023$Player %in% common_players, ]
+```
+
+Merge yearly stats into a single dataset
+```{r}
+merged_stats <- merge(stats_2021_common, stats_2022_common, by="Player", suffixes = c("_2021", "_2022"))
+merged_stats <- merge(merged_stats, stats_2023_common, by="Player")
+```
+
+Compute weighted averages for ERA, FIP, and WHIP. Average innings pitched (IP) and wins (W)
+```{r}
+merged_stats$ERA_weighted <- merged_stats$ERA_2021 * 0.2 + merged_stats$ERA_2022 * 0.3 + merged_stats$ERA * 0.5
+merged_stats$FIP_weighted <- merged_stats$FIP_2021 * 0.2 + merged_stats$FIP_2022 * 0.3 + merged_stats$FIP * 0.5
+merged_stats$WHIP_weighted <- merged_stats$WHIP_2021 * 0.2 + merged_stats$WHIP_2022 * 0.3 + merged_stats$WHIP * 0.5
+merged_stats$IP_avg <- rowMeans(merged_stats[, c("IP_2021", "IP_2022", "IP")])
+merged_stats$W_avg <- rowMeans(merged_stats[, c("W_2021", "W_2022", "W")])
+```
+
+Select final statistics
+```{r}
+final_stats <- merged_stats[, c("Player", "ERA_weighted", "FIP_weighted", "WHIP_weighted", "IP_avg", "W_avg")]
+```
+
+Merge with 2024 weighted scores and Rename Column
+```{r}
+final_stats <- merge(final_stats, stats_2024_z[, c("Player", "Weighted_Score")], by = "Player", all.x = TRUE)
+
+final_stats <- final_stats %>%
+  rename(Weighted_Score2024 = Weighted_Score)
+```
+
+Develop a multiple regression model to predict 2024 weighted scores
+```{r}
+regression_model <- lm(Weighted_Score2024 ~ ERA_weighted + FIP_weighted + WHIP_weighted + IP_avg + W_avg, data = final_stats)
+
+summary(regression_model)
+```
+
+Predict weighted score for Shohei Ohtani
+```{r}
+player_name <- "Shohei Ohtani"
+
+ohtani_2021 <- stats_2021[stats_2021$Player == player_name, ]
+ohtani_2022 <- stats_2022[stats_2022$Player == player_name, ]
+ohtani_2023 <- stats_2023[stats_2023$Player == player_name, ]
+
+ohtani_weighted_stats <- data.frame(
+  ERA_weighted = (ohtani_2021$ERA * 0.2) + (ohtani_2022$ERA * 0.3) + (ohtani_2023$ERA * 0.5),
+  FIP_weighted = (ohtani_2021$FIP * 0.2) + (ohtani_2022$FIP * 0.3) + (ohtani_2023$FIP * 0.5),
+  WHIP_weighted = (ohtani_2021$WHIP * 0.2) + (ohtani_2022$WHIP * 0.3) + (ohtani_2023$WHIP * 0.5),
+  IP_avg = mean(c(ohtani_2021$IP, ohtani_2022$IP, ohtani_2023$IP)),
+  W_avg = mean(c(ohtani_2021$W, ohtani_2022$W, ohtani_2023$W))
+)
+
+ohtani_prediction <- predict(regression_model, ohtani_weighted_stats)
+
+print(paste("Predicted Weighted_Score2024 for Shohei Ohtani:", round(ohtani_prediction, 4)))
+```
+
+Add Shohei Ohtani to data frame with the rest of the players
+```{r}
+ohtani_weighted_stats$Player <- "Shohei Ohtani"
+
+ohtani_weighted_stats$Weighted_Score2024 <- ohtani_prediction
+
+final_stats_extended <- rbind(final_stats, ohtani_weighted_stats)
+```
+
+Create a Data Frame of how would it look vs the Top 5 Pitchers and Total Pitchers 
+```{r}
+top5_mean <- mean(head(final_stats[order(-final_stats$Weighted_Score2024), ]$Weighted_Score2024, 5))
+total_mean <- mean(final_stats_extended$Weighted_Score2024)
+ohtani_score <- final_stats_extended[final_stats_extended$Player == "Shohei Ohtani", ]$Weighted_Score2024
+
+comparison_df <- data.frame(
+  Category = c("Top 5 Mean", "Total Mean", "Shohei Ohtani"),
+  Score = c(top5_mean, total_mean, ohtani_score)
+)
+```
+
+Bar Plot comparison between Ohtani, the average of the Top 5 players and the total players average 
+```{r}
+baseball_colors <- c("Shohei Ohtani" = "dodgerblue",
+                     "Top 5 Mean" = "#FFD700", 
+                     "Total Mean" = "#BA0021")
+
+ggplot(comparison_df, aes(x = Score, y = Category, fill = Category)) +
+  geom_col(show.legend = FALSE) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", linewidth = 1) +
+  geom_text(aes(label = round(Score, 2)), hjust = -.05, 
+            size = 3.2, fontface = "bold", color = "black") +
+  scale_fill_manual(values = baseball_colors) +
+  labs(
+    title = "Shohei Ohtani's Weighted Score 2024 vs. League",
+    subtitle = "Comparison with Top 5 Mean and Total Mean",
+    x = "Weighted Score 2024",
+    y = "Category"
+  ) +
+  theme_minimal(base_size = 14)
+```
+
+Scatterplot that helps compare where Ohtani places against other pitchers
+```{r}
+top_15 <- head(final_stats_extended[order(-final_stats_extended$Weighted_Score2024), ], 15)
+
+ggplot(top_15, aes(x = Weighted_Score2024, y = reorder(Player, Weighted_Score2024))) +
+  geom_point(aes(color = ifelse(Player == "Shohei Ohtani", "Ohtani", "Others")), size = 4, show.legend = FALSE) + 
+  scale_color_manual(values = c("Ohtani" = "dodgerblue", "Others" = "gray50")) +
+  labs(
+    title = "Scatter Plot of Top 15 Players' Weighted Score 2024",
+    x = "Weighted Score 2024",
+    y = "Players"
+  ) +
+  theme_minimal(base_size = 14)
+```
+
+Prediction vs Actual Stats
+```{r}
+final_stats_prediction_comp <- final_stats %>%
+  mutate(Weighted_Score_Prediction = predict(regression_model, newdata = final_stats))
+View(final_stats_prediction_comp)
+```
+
+```{r}
+ggplot(final_stats_prediction_comp, aes(x = Weighted_Score2024, y = Weighted_Score_Prediction)) +
+  geom_point(color = "dodgerblue", alpha = 0.7) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black", linewidth = 1) +  # Perfect prediction line
+  labs(
+    title = "Actual vs. Predicted Weighted Scores (2024)",
+    x = "Actual Weighted Score",
+    y = "Predicted Weighted Score"
+  ) +
+  theme_minimal(base_size = 14)
+```
+
