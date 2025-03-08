@@ -13,9 +13,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Load Necessary Libraries
 ```{r}
-library(dplyr)  # For data manipulation
-library(ggplot2)  # For visualization
-library(tidyr)  # For data wrangling
+library(dplyr)  
+library(ggplot2)
+library(tidyr)
 ```
 
 Set working directory (adjust the path accordingly)
