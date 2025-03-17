@@ -1,5 +1,5 @@
 ---
-title: "Shohei Ohtani (The Pitcher) Correct"
+title: "Shohei Ohtani's 2024 Pitching What-If
 author: "Marco Paul Perez"
 date: "`r Sys.Date()`"
 output:
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Load Necessary Libraries
 ```{r}
-library(dplyr)  
+library(dplyr)
 library(ggplot2)
 library(tidyr)
 ```
@@ -161,40 +161,63 @@ ohtani_weighted_stats$Weighted_Score2024 <- ohtani_prediction
 final_stats_extended <- rbind(final_stats, ohtani_weighted_stats)
 ```
 
-Create a Data Frame of how would it look vs the Top 5 Pitchers and Total Pitchers 
+Prediction vs Actual Stats
 ```{r}
-top5_mean <- mean(head(final_stats[order(-final_stats$Weighted_Score2024), ]$Weighted_Score2024, 5))
-total_mean <- mean(final_stats_extended$Weighted_Score2024)
-ohtani_score <- final_stats_extended[final_stats_extended$Player == "Shohei Ohtani", ]$Weighted_Score2024
-
-comparison_df <- data.frame(
-  Category = c("Top 5 Mean", "Total Mean", "Shohei Ohtani"),
-  Score = c(top5_mean, total_mean, ohtani_score)
-)
+final_stats_prediction_comp <- final_stats %>%
+  mutate(Weighted_Score_Prediction = predict(regression_model, newdata = final_stats))
 ```
 
-Bar Plot comparison between Ohtani, the average of the Top 5 players and the total players average 
 ```{r}
+ggplot(final_stats_prediction_comp, aes(x = Weighted_Score2024, y = Weighted_Score_Prediction)) +
+  geom_point(color = "dodgerblue", alpha = 0.7) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black", linewidth = 1) + 
+  labs(
+    title = "Actual vs. Predicted Weighted Scores (2024)",
+    x = "Actual Weighted Score",
+    y = "Predicted Weighted Score"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+Create a Data Frame of how would it look vs Zach Wheeler (highest rated pitcher) and Total Pitchers 
+```{r}
+total_mean <- mean(final_stats_extended$Weighted_Score2024)
+ohtani_score <- final_stats_extended[final_stats_extended$Player == "Shohei Ohtani", ]$Weighted_Score2024
+wheeler_score <- final_stats_extended[final_stats_extended$Player == "Zack Wheeler", ]$Weighted_Score2024
+
+comparison_df <- data.frame(
+  Category = c("Zack Wheeler", "Shohei Ohtani", "Total Mean of Pitchers"),
+  Score = c(wheeler_score, ohtani_score, total_mean))
+```
+
+Bar Plot comparison between Ohtani, Wheeler and the total players average 
+```{r}
+comparison_df$Category <- factor(comparison_df$Category, levels = comparison_df$Category[order(comparison_df$Score, decreasing = TRUE)])
+
+
 baseball_colors <- c("Shohei Ohtani" = "dodgerblue",
-                     "Top 5 Mean" = "#FFD700", 
-                     "Total Mean" = "#BA0021")
+                     "Zack Wheeler" = "#FFD700", 
+                     "Total Mean of Pitchers" = "#BA0021")
 
 ggplot(comparison_df, aes(x = Score, y = Category, fill = Category)) +
   geom_col(show.legend = FALSE) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black", linewidth = 1) +
   geom_text(aes(label = round(Score, 2)), hjust = -.05, 
-            size = 3.2, fontface = "bold", color = "black") +
+            size = 3, fontface = "bold", color = "black") +
   scale_fill_manual(values = baseball_colors) +
   labs(
     title = "Shohei Ohtani's Weighted Score 2024 vs. League",
-    subtitle = "Comparison with Top 5 Mean and Total Mean",
+    subtitle = "Comparison with Zack Wheeler and Total Mean",
     x = "Weighted Score 2024",
     y = "Category"
   ) +
   theme_minimal(base_size = 14)
 ```
 
-Scatterplot that helps compare where Ohtani places against other pitchers
+Cleveland Dot Plot that helps compare where Ohtani places against other pitchers
 ```{r}
 top_15 <- head(final_stats_extended[order(-final_stats_extended$Weighted_Score2024), ], 15)
 
@@ -202,29 +225,13 @@ ggplot(top_15, aes(x = Weighted_Score2024, y = reorder(Player, Weighted_Score202
   geom_point(aes(color = ifelse(Player == "Shohei Ohtani", "Ohtani", "Others")), size = 4, show.legend = FALSE) + 
   scale_color_manual(values = c("Ohtani" = "dodgerblue", "Others" = "gray50")) +
   labs(
-    title = "Scatter Plot of Top 15 Players' Weighted Score 2024",
+    title = "Cleveland Dot Plot of Top 15 Players",
     x = "Weighted Score 2024",
     y = "Players"
   ) +
-  theme_minimal(base_size = 14)
-```
-
-Prediction vs Actual Stats
-```{r}
-final_stats_prediction_comp <- final_stats %>%
-  mutate(Weighted_Score_Prediction = predict(regression_model, newdata = final_stats))
-View(final_stats_prediction_comp)
-```
-
-```{r}
-ggplot(final_stats_prediction_comp, aes(x = Weighted_Score2024, y = Weighted_Score_Prediction)) +
-  geom_point(color = "dodgerblue", alpha = 0.7) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black", linewidth = 1) +  # Perfect prediction line
-  labs(
-    title = "Actual vs. Predicted Weighted Scores (2024)",
-    x = "Actual Weighted Score",
-    y = "Predicted Weighted Score"
-  ) +
-  theme_minimal(base_size = 14)
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
 ```
 
